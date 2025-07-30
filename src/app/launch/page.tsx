@@ -12,7 +12,7 @@ export default function LaunchPage() {
     console.log("Firebase Initialized", app.name);
 
     FHIR.oauth2.authorize({
-      clientId: "enter_your_client_id_here", // This must be obtained from your FHIR server's developer portal
+      clientId: "21c14f4e-ec5c-4295-ac1c-50ee0e99eee2", // This must be obtained from your FHIR server's developer portal
       scope: "launch/patient patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
       redirectUri: "/",
       // The 'iss' (issuer) parameter is automatically read from the launch URL query parameters
