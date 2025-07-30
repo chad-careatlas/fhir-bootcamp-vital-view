@@ -3,9 +3,14 @@
 import { useEffect } from "react";
 import FHIR from "fhirclient";
 import { Skeleton } from "@/components/ui/skeleton";
+import { app } from "@/lib/firebase"; // Import the initialized firebase app
 
 export default function LaunchPage() {
   useEffect(() => {
+    // The initializeApp function will be called when firebase.ts is imported.
+    // You can now use Firebase services throughout your app.
+    console.log("Firebase Initialized", app.name);
+
     FHIR.oauth2.authorize({
       clientId: "enter_your_client_id_here", // This must be obtained from your FHIR server's developer portal
       scope: "launch/patient patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
