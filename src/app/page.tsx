@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import FHIR from "fhirclient";
 import type { Client } from "fhirclient/lib/types";
 import { getPatient, getVitals, createVitals } from "@/lib/fhir";
@@ -10,10 +12,11 @@ import { VitalsDisplay } from "@/components/VitalsDisplay";
 import { VitalsForm } from "@/components/VitalsForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Terminal, Power } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-export default function Home() {
+function AppContent() {
   const [client, setClient] = useState<Client | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [observations, setObservations] = useState<Observation[]>([]);
@@ -97,6 +100,13 @@ export default function Home() {
             <AlertTitle>Application Error</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
+           <div className="mt-6 text-center">
+              <Link href="/launch">
+                <Button>
+                  <Power className="mr-2 h-4 w-4" /> Go to Launch Page
+                </Button>
+              </Link>
+            </div>
         </div>
       </div>
     );
@@ -116,4 +126,38 @@ export default function Home() {
       </main>
     </div>
   );
+}
+
+
+export default function Home() {
+  const searchParams = useSearchParams();
+  const hasAuthParams = searchParams.has('code') && searchParams.has('state');
+
+  if (!hasAuthParams) {
+     return (
+      <div className="container mx-auto flex h-screen items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-lg text-center">
+           <header className="mb-8">
+            <h1 className="text-4xl font-bold text-primary font-headline">VitalView</h1>
+           </header>
+           <Alert>
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Welcome!</AlertTitle>
+            <AlertDescription>
+              This is a SMART on FHIR application. Please launch it from the /launch page or from your EHR.
+            </AlertDescription>
+           </Alert>
+           <div className="mt-6">
+            <Link href="/launch">
+              <Button>
+                <Power className="mr-2 h-4 w-4" /> Go to Launch Page
+              </Button>
+            </Link>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  return <AppContent />;
 }
