@@ -159,13 +159,27 @@ function Welcome() {
 
 
 function LaunchHandler() {
+  const searchParams = useSearchParams();
+  const iss = searchParams.get('iss');
+  const launch = searchParams.get('launch');
+
   useEffect(() => {
+    if (!iss || !launch) {
+      console.error('Missing required launch parameters');
+      return;
+    }
+
+    // Using localhost with trailing slash as registered in Cerner
+    const redirectUri = "http://localhost:9002/";
+    
     FHIR.oauth2.authorize({
       clientId: "21c14f4e-ec5c-4295-ac1c-50ee0e99eee2",
-      scope: "launch/patient patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
-      redirectUri: window.location.origin,
+      scope: "launch patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
+      redirectUri: redirectUri,
+      iss: iss,
+      launch: launch,
     });
-  }, []);
+  }, [iss, launch]);
 
   return (
     <div className="flex h-screen w-full items-center justify-center bg-background">
@@ -186,6 +200,43 @@ function AuthChecker() {
   const searchParams = useSearchParams();
   const hasAuthParams = searchParams.has('code') && searchParams.has('state');
   const hasLaunchParams = searchParams.has('iss') && searchParams.has('launch');
+  const hasError = searchParams.has('error');
+
+  // Handle OAuth errors
+  if (hasError) {
+    const error = searchParams.get('error');
+    const errorUri = searchParams.get('error_uri');
+    return (
+      <div className="container mx-auto flex h-screen items-center justify-center p-4 md:p-8">
+        <div className="w-full max-w-lg">
+          <header className="mb-8 text-center">
+            <h1 className="text-4xl font-bold text-primary font-headline">VitalView</h1>
+          </header>
+          <Alert variant="destructive">
+            <Terminal className="h-4 w-4" />
+            <AlertTitle>Authorization Error</AlertTitle>
+            <AlertDescription>
+              {error === 'invalid_request' ? 'The authorization request was invalid. Please try launching again from your EHR.' : `Error: ${error}`}
+              {errorUri && (
+                <div className="mt-2">
+                  <a href={errorUri} target="_blank" rel="noopener noreferrer" className="text-sm underline">
+                    View error details
+                  </a>
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
+          <div className="mt-6 text-center">
+            <Link href="/">
+              <Button>
+                <Power className="mr-2 h-4 w-4" /> Return to Home
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Handle SMART launch
   if (hasLaunchParams) {
