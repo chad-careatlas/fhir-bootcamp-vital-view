@@ -7,30 +7,19 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { HeartPulse, PlusCircle, Gauge } from "lucide-react";
+import { HeartPulse, PlusCircle } from "lucide-react";
 import { Separator } from "./ui/separator";
 
 const vitalsSchema = z.object({
-  systolic: z.string().optional(),
-  diastolic: z.string().optional(),
-  spO2: z.string().optional(),
+  systolic: z.string(),
+  diastolic: z.string(),
 })
 .transform(data => ({
-  systolic: data.systolic && data.systolic !== '' ? Number(data.systolic) : undefined,
-  diastolic: data.diastolic && data.diastolic !== '' ? Number(data.diastolic) : undefined,
-  spO2: data.spO2 && data.spO2 !== '' ? Number(data.spO2) : undefined,
+  systolic: Number(data.systolic),
+  diastolic: Number(data.diastolic),
 }))
-.refine(data => (data.systolic && data.diastolic) || data.spO2, {
-  message: "Enter at least blood pressure or SpO2.",
-  path: ["systolic"], 
-})
-.refine(data => !((data.systolic && !data.diastolic) || (!data.systolic && data.diastolic)), {
-  message: "Both systolic and diastolic are required for blood pressure.",
-  path: ["diastolic"],
-})
-.refine(data => !data.systolic || (data.systolic >= 50 && data.systolic <= 300), { message: "Must be 50-300.", path: ["systolic"] })
-.refine(data => !data.diastolic || (data.diastolic >= 30 && data.diastolic <= 200), { message: "Must be 30-200.", path: ["diastolic"] })
-.refine(data => !data.spO2 || (data.spO2 >= 70 && data.spO2 <= 100), { message: "Must be 70-100.", path: ["spO2"] });
+.refine(data => data.systolic >= 50 && data.systolic <= 300, { message: "Must be 50-300.", path: ["systolic"] })
+.refine(data => data.diastolic >= 30 && data.diastolic <= 200, { message: "Must be 30-200.", path: ["diastolic"] });
 
 
 type VitalsFormValues = z.infer<typeof vitalsSchema>;
@@ -46,7 +35,6 @@ export function VitalsForm({ onSubmit, isSubmitting }: VitalsFormProps) {
     defaultValues: {
       systolic: '',
       diastolic: '',
-      spO2: '',
     },
   });
 
@@ -96,23 +84,6 @@ export function VitalsForm({ onSubmit, isSubmitting }: VitalsFormProps) {
                   )}
                 />
               </div>
-            </div>
-            <Separator />
-            <div className="space-y-4">
-              <h3 className="flex items-center gap-2 font-semibold text-lg"><Gauge className="text-primary h-5 w-5"/>Oxygen Saturation</h3>
-              <FormField
-                control={form.control}
-                name="spO2"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>SpO2 (%)</FormLabel>
-                    <FormControl>
-                      <Input type="number" placeholder="98" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
             {form.formState.errors.root && (
               <p className="text-sm font-medium text-destructive">{form.formState.errors.root.message}</p>

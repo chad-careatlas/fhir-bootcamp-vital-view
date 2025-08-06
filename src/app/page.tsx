@@ -124,6 +124,16 @@ function AppContent() {
       
       <main className="max-w-4xl mx-auto">
         {showPatientBanner && <PatientBanner patient={patient} />}
+        
+        {/* Sandbox limitation notice - only show if using fallback patient */}
+        {patient && patient.name?.[0]?.given?.[0] === 'Patient' && (
+          <Alert className="mb-4">
+            <AlertDescription>
+              Note: Using limited patient data. Full demographics may not be available in sandbox.
+            </AlertDescription>
+          </Alert>
+        )}
+        
         <VitalsForm onSubmit={handleVitalsSubmit} isSubmitting={isSubmitting} />
         <VitalsDisplay observations={observations} />
       </main>
