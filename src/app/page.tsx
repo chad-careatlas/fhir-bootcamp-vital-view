@@ -29,11 +29,33 @@ function AppContent() {
     setLoading(true);
     setError(null);
     try {
-      const patientData = await getPatient(fhirClient);
-      setPatient(patientData);
-      if (patientData) {
-        const vitalsData = await getVitals(fhirClient);
-        setObservations(vitalsData);
+      // First, let's just try to get the patient context without fetching
+      const patientId = fhirClient.patient.id;
+      console.log('Patient context ID:', patientId);
+      
+      if (patientId) {
+        // Start with minimal patient info for immediate UI feedback
+        setPatient({ 
+          id: patientId
+        } as Patient);
+        
+        // Fetch patient data and vitals in parallel for speed
+        const [patientResult, vitalsResult] = await Promise.allSettled([
+          getPatient(fhirClient),
+          getVitals(fhirClient)
+        ]);
+        
+        // Handle patient data
+        if (patientResult.status === 'fulfilled' && patientResult.value) {
+          setPatient(patientResult.value);
+        }
+        
+        // Handle vitals data
+        if (vitalsResult.status === 'fulfilled') {
+          setObservations(vitalsResult.value);
+        } else {
+          setObservations([]);
+        }
       }
     } catch (e: any) {
       setError("Failed to load patient data or vitals.");
@@ -46,11 +68,22 @@ function AppContent() {
   useEffect(() => {
     const initializeClient = async () => {
       try {
+        console.log('Attempting to initialize FHIR client...');
         const fhirClient = await FHIR.oauth2.ready();
+        console.log('FHIR client initialized:', fhirClient);
+        
+        // Debug: Check what scopes we actually got
+        const tokenResponse = fhirClient.state.tokenResponse;
+        console.log('Token response:', tokenResponse);
+        console.log('Granted scopes:', tokenResponse?.scope);
+        console.log('Patient ID:', fhirClient.patient.id);
+        console.log('Full client state:', fhirClient.state);
+        console.log('Need patient banner?', tokenResponse?.need_patient_banner);
+        
         setClient(fhirClient);
         await loadData(fhirClient);
       } catch (err) {
-        console.error(err);
+        console.error('FHIR client initialization error:', err);
         setError("Failed to authorize with FHIR server. Please launch the application from your EHR system.");
         setLoading(false);
       }
@@ -73,7 +106,9 @@ function AppContent() {
     setIsSubmitting(false);
   };
   
-  const showPatientBanner = client?.state.context?.hide_patient_banner === false;
+  // Check context for patient banner setting
+  const hidePatientBanner = client?.state?.tokenResponse?.hide_patient_banner;
+  const showPatientBanner = hidePatientBanner !== true; // Show unless explicitly hidden
 
   if (loading) {
     return (
@@ -123,7 +158,25 @@ function AppContent() {
       </header>
       
       <main className="max-w-4xl mx-auto">
-        {showPatientBanner && <PatientBanner patient={patient} />}
+        {showPatientBanner && (
+          patient?.name ? (
+            <PatientBanner patient={patient} />
+          ) : (
+            // Show skeleton while loading patient details
+            <Card className="mb-6 shadow-md">
+              <CardHeader>
+                <Skeleton className="h-6 w-48" />
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              </CardContent>
+            </Card>
+          )
+        )}
         <VitalsForm onSubmit={handleVitalsSubmit} isSubmitting={isSubmitting} />
         <VitalsDisplay observations={observations} />
       </main>
@@ -172,9 +225,11 @@ function LaunchHandler() {
     // Using localhost with trailing slash as registered in Cerner
     const redirectUri = "http://localhost:9002/";
     
+    // Try minimal scopes that match exactly what Cerner expects
+    // Based on SMART v2 and your app being for providers
     FHIR.oauth2.authorize({
       clientId: "21c14f4e-ec5c-4295-ac1c-50ee0e99eee2",
-      scope: "launch patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
+      scope: "launch patient/Patient.rs patient/Observation.rs openid fhirUser",
       redirectUri: redirectUri,
       iss: iss,
       launch: launch,
@@ -198,9 +253,45 @@ function LaunchHandler() {
 
 function AuthChecker() {
   const searchParams = useSearchParams();
+  const [isOAuthCallback, setIsOAuthCallback] = useState(false);
+  
   const hasAuthParams = searchParams.has('code') && searchParams.has('state');
   const hasLaunchParams = searchParams.has('iss') && searchParams.has('launch');
   const hasError = searchParams.has('error');
+
+  // Debug logging and check for OAuth callback
+  useEffect(() => {
+    console.log('URL params:', Object.fromEntries(searchParams.entries()));
+    console.log('Hash params:', window.location.hash);
+    console.log('Has auth params:', hasAuthParams);
+    console.log('Has launch params:', hasLaunchParams);
+    console.log('Has error:', hasError);
+    
+    // Check if this might be an OAuth callback even without visible params
+    // The fhirclient library might handle the params internally
+    if (window.location.pathname === '/' && !hasLaunchParams && !hasError) {
+      // Check for any SMART session data
+      try {
+        const keys = Object.keys(sessionStorage);
+        const hasSmartSession = keys.some(key => 
+          key.includes('SMART') || 
+          key.includes('smart') || 
+          key === 'authorization_state'
+        );
+        
+        // Also check if we just came from an OAuth flow
+        const referrer = document.referrer;
+        const fromCerner = referrer.includes('cerner.com') || referrer.includes('authorization');
+        
+        if (hasSmartSession || hasAuthParams || fromCerner) {
+          console.log('Detected OAuth callback - has SMART session or came from auth');
+          setIsOAuthCallback(true);
+        }
+      } catch (e) {
+        console.error('Error checking session storage:', e);
+      }
+    }
+  }, [searchParams, hasAuthParams, hasLaunchParams, hasError]);
 
   // Handle OAuth errors
   if (hasError) {
@@ -243,9 +334,26 @@ function AuthChecker() {
     return <LaunchHandler />;
   }
 
-  // Handle OAuth callback
-  if (hasAuthParams) {
+  // Handle OAuth callback - check for any SMART session
+  if (hasAuthParams || isOAuthCallback) {
     return <AppContent />;
+  }
+  
+  // Also check if FHIR client might be ready
+  try {
+    // More aggressive check for any SMART session
+    const keys = Object.keys(sessionStorage);
+    const hasAnySmartData = keys.some(key => 
+      key.toLowerCase().includes('smart') || 
+      key.includes('authorization') ||
+      sessionStorage.getItem(key)?.includes('fhir')
+    );
+    
+    if (hasAnySmartData) {
+      return <AppContent />;
+    }
+  } catch (e) {
+    // Ignore sessionStorage errors
   }
 
   return <Welcome />;
