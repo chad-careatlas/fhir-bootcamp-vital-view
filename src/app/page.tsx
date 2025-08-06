@@ -13,6 +13,7 @@ import { VitalsForm } from "@/components/VitalsForm";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Terminal, Power } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
