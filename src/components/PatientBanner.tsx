@@ -12,8 +12,9 @@ export function PatientBanner({ patient }: PatientBannerProps) {
     return null;
   }
 
+  // Handle FHIR Patient resource structure
   const name = patient.name?.[0];
-  const patientName = name ? `${name.given.join(" ")} ${name.family}` : "Unknown Patient";
+  const patientName = name ? `${name.given?.join(" ")} ${name.family}` : "Unknown Patient";
   const birthDate = patient.birthDate ? format(new Date(patient.birthDate), "MM/dd/yyyy") : "N/A";
 
   return (
