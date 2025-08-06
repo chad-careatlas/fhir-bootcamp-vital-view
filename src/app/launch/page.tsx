@@ -7,8 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function LaunchPage() {
   useEffect(() => {
     FHIR.oauth2.authorize({
-      clientId: "21c14f4e-ec5c-4295-ac1c-50ee0e99eee2", // This must be obtained from your FHIR server's developer portal
-      scope: "launch/patient patient/Observation.read patient/Observation.write patient/Patient.read openid fhirUser",
+      clientId: "d3a97514-e030-4c9e-8e64-7be8127528b9", // Updated client ID for SMART v1
+      scope: "patient/Patient.read patient/Observation.read patient/Observation.write launch openid fhirUser offline_access",
       redirectUri: window.location.origin,
       // The 'iss' (issuer) parameter is automatically read from the launch URL query parameters
     });
