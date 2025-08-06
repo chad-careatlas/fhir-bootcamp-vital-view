@@ -116,6 +116,20 @@ export async function createVitals(
       },
       subject: { reference: `Patient/${patientId}` },
       effectiveDateTime: now,
+      performer: [{
+        extension: [{
+          valueCodeableConcept: {
+            coding: [{
+              system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType',
+              code: 'LA',
+              display: 'legal authenticator'
+            }],
+            text: 'legal authenticator'
+          },
+          url: 'http://hl7.org/fhir/StructureDefinition/event-performerFunction'
+        }],
+        reference: `Practitioner/${client.user?.id || client.state.tokenResponse?.user || '12742069'}`
+      }],
       component: [
         {
           code: { coding: [{ system: 'http://loinc.org', code: SYSTOLIC_CODE, display: 'Systolic Blood Pressure' }] },
@@ -133,18 +147,46 @@ export async function createVitals(
     observations.push({
       resourceType: 'Observation',
       status: 'final',
+      category: [{
+        coding: [{
+          system: 'http://terminology.hl7.org/CodeSystem/observation-category',
+          code: 'vital-signs',
+          display: 'Vital Signs'
+        }],
+        text: 'Vital Signs'
+      }],
       code: {
-        coding: [{ system: 'http://loinc.org', code: SPO2_CODE, display: 'Oxygen saturation in Arterial blood by Pulse oximetry' }],
+        coding: [{ 
+          system: 'http://loinc.org', 
+          code: '2708-6',
+          display: 'Oxygen saturation in Arterial blood'
+        }],
         text: 'Oxygen Saturation'
       },
       subject: { reference: `Patient/${patientId}` },
       effectiveDateTime: now,
-      valueQuantity: { value: vitals.spO2, unit: '%', system: 'http://unitsofmeasure.org', code: '%' }
-    });
-  }
+      performer: [{
+        extension: [{
+          valueCodeableConcept: {
+            coding: [{
+              system: 'http://terminology.hl7.org/CodeSystem/v3-ParticipationType',
+              code: 'LA',
+              display: 'legal authenticator'
+            }],
+            text: 'legal authenticator'
+          },
+          url: 'http://hl7.org/fhir/StructureDefinition/event-performerFunction'
+        }],
+        reference: `Practitioner/${client.user?.id || client.state.tokenResponse?.user || '12742069'}`
+      }],
+      valueQuantity: { 
+        value: vitals.spO2, 
+        unit: '%', 
+        system: 'http://unitsofmeasure.org', 
+        code: '%' 
+      }
     };
     
-    // Add encounter reference if available
     if (encounterId) {
       bpObservation.encounter = { reference: `Encounter/${encounterId}` };
     }
@@ -170,6 +212,7 @@ export async function createVitals(
 
   try {
     console.log('=== CREATE OBSERVATION REQUEST ===');
+<<<<<<< ours
     console.log('Number of observations to create:', observations.length);
     console.log('First observation to create:', JSON.stringify(observations[0], null, 2));
     
@@ -178,11 +221,29 @@ export async function createVitals(
     console.log('=== MANUAL REQUEST TEST ===');
     console.log('Access token available:', !!accessToken);
     console.log('Token type:', client.state.tokenResponse?.token_type);
+||||||| ancestor
+    console.log('Server URL:', client.state.serverUrl);
+    console.log('Access token exists:', !!accessToken);
+    console.log('Access token (first 30 chars):', accessToken.substring(0, 30) + '...');
+    console.log('Token type:', client.state.tokenResponse?.token_type);
+    console.log('Request body:', JSON.stringify(observations[0], null, 2));
+=======
+    console.log('Number of observations to create:', observations.length);
+    console.log('First observation to create:', JSON.stringify(observations[0], null, 2));
+>>>>>>> theirs
     
+<<<<<<< ours
+||||||| ancestor
+    // The fhirclient library should handle authorization automatically
+    // Try creating observations using the client methods
+=======
+    // Use the fhirclient library's built-in create method
+>>>>>>> theirs
     const results = await Promise.allSettled(
       observations.map(async (obs) => {
         console.log('Creating observation:', obs.code.text);
         try {
+<<<<<<< ours
           // Try using client.request instead of client.create to have more control
           const result = await client.request({
             url: 'Observation',
@@ -192,7 +253,75 @@ export async function createVitals(
               'Content-Type': 'application/fhir+json',
               'Authorization': `Bearer ${accessToken}`
             }
+||||||| ancestor
+          // Method 1: Try manual fetch with explicit Authorization header first
+          console.log('Attempting manual fetch with explicit Authorization header');
+          const url = `${client.state.serverUrl}/Observation`;
+          const headers = {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/fhir+json',
+            'Accept': 'application/fhir+json'
+          };
+          
+          console.log('Full request details:');
+          console.log('URL:', url);
+          console.log('Headers:', headers);
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(obs)
           });
+          
+          console.log('Response status:', response.status);
+          console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+          
+          if (!response.ok) {
+            const errorBody = await response.text();
+            console.error('Error response body:', errorBody);
+            throw new Error(`HTTP ${response.status}: ${errorBody}`);
+          }
+          
+          return await response.json();
+          
+        } catch (manualError: any) {
+          console.error('Manual fetch failed:', manualError);
+          
+          // Method 2: Fallback to client.create if available
+          if (typeof client.create === 'function') {
+            console.log('Trying client.create method as fallback');
+            try {
+              return await client.create(obs);
+            } catch (createError: any) {
+              console.error('client.create also failed:', createError);
+              throw createError;
+            }
+          }
+          
+          // Method 3: Try client.request
+          console.log('Trying client.request method as final fallback');
+          return await client.request({
+            url: 'Observation',
+            method: 'POST',
+            body: obs,
+            headers: {
+              'Content-Type': 'application/fhir+json',
+              'Accept': 'application/fhir+json'
+            }
+=======
+          const result = await client.create(obs);
+          console.log('Successfully created:', obs.code.text, result);
+          return result;
+        } catch (err: any) {
+          console.error('Failed to create observation:', obs.code.text, err);
+          console.error('Error details:', {
+            status: err.status,
+            statusText: err.statusText,
+            message: err.message,
+            response: err.response
+>>>>>>> theirs
+          });
+<<<<<<< ours
           console.log('Successfully created:', obs.code.text, result);
           return result;
         } catch (err: any) {
@@ -204,6 +333,10 @@ export async function createVitals(
             response: err.response
           });
           throw err;
+||||||| ancestor
+=======
+          throw err;
+>>>>>>> theirs
         }
       })
     );
