@@ -35,12 +35,7 @@ function AppContent() {
       console.log('Patient context ID:', patientId);
       
       if (patientId) {
-        // Start with minimal patient info for immediate UI feedback
-        setPatient({ 
-          id: patientId
-        } as Patient);
-        
-        // Fetch patient data and vitals in parallel for speed
+        // Fetch patient data and vitals in parallel
         const [patientResult, vitalsResult] = await Promise.allSettled([
           getPatient(fhirClient),
           getVitals(fhirClient)
@@ -48,19 +43,31 @@ function AppContent() {
         
         // Handle patient data
         if (patientResult.status === 'fulfilled' && patientResult.value) {
+          console.log('Successfully fetched patient data');
           setPatient(patientResult.value);
+        } else {
+          console.warn('Could not fetch full patient details');
+          // The getPatient function will return a fallback patient object
+          if (patientResult.status === 'rejected') {
+            // Try to get the fallback from a fresh call
+            const fallbackPatient = await getPatient(fhirClient);
+            if (fallbackPatient) {
+              setPatient(fallbackPatient);
+            }
+          }
         }
         
         // Handle vitals data
         if (vitalsResult.status === 'fulfilled') {
           setObservations(vitalsResult.value);
         } else {
+          console.warn('Could not fetch vitals');
           setObservations([]);
         }
       }
     } catch (e: any) {
-      setError("Failed to load patient data or vitals.");
-      console.error(e);
+      console.error('Load data error:', e);
+      // Don't show error - allow app to function for writes
     } finally {
       setLoading(false);
     }
@@ -70,16 +77,70 @@ function AppContent() {
     const initializeClient = async () => {
       try {
         console.log('Attempting to initialize FHIR client...');
+        
+        // Add fetch interceptor to log headers
+        const originalFetch = window.fetch;
+        window.fetch = function(...args) {
+          const [url, options] = args;
+          console.log('=== FETCH REQUEST ===');
+          console.log('URL:', url);
+          console.log('Method:', options?.method || 'GET');
+          console.log('Headers:', options?.headers);
+          console.log('Body:', options?.body);
+          return originalFetch.apply(this, args);
+        };
+        
         const fhirClient = await FHIR.oauth2.ready();
         console.log('FHIR client initialized:', fhirClient);
+        console.log('Full client state:', fhirClient.state);
+        
+        // Log the OAuth endpoints being used
+        console.log('=== OAUTH CONFIGURATION ===');
+        console.log('Token endpoint:', fhirClient.state.tokenUri);
+        console.log('Authorization endpoint:', fhirClient.state.authorizeUri);
+        console.log('Client ID:', fhirClient.state.clientId);
+        console.log('Redirect URI:', fhirClient.state.redirectUri);
         
         // Debug: Check what scopes we actually got
         const tokenResponse = fhirClient.state.tokenResponse;
         console.log('Token response:', tokenResponse);
         console.log('Granted scopes:', tokenResponse?.scope);
+        console.log('Access token (first 20 chars):', tokenResponse?.access_token?.substring(0, 20) + '...');
+        console.log('Token expires in:', tokenResponse?.expires_in, 'seconds');
         console.log('Patient ID:', fhirClient.patient.id);
-        console.log('Full client state:', fhirClient.state);
-        console.log('Need patient banner?', tokenResponse?.need_patient_banner);
+        console.log('User ID:', tokenResponse?.user);
+        console.log('Encounter ID:', tokenResponse?.encounter);
+        console.log('Server URL:', fhirClient.state.serverUrl);
+        
+        // Check if we have write scopes
+        const scopes = tokenResponse?.scope?.split(' ') || [];
+        const hasWriteScope = scopes.some(s => 
+          s.includes('write') || 
+          s.includes('.c') || 
+          s.includes('.crs') || 
+          s.includes('.cud')
+        );
+        console.log('Has write permissions:', hasWriteScope);
+        
+        // Test the token by making a simple request
+        console.log('=== TESTING TOKEN VALIDITY ===');
+        try {
+          const testUrl = `${fhirClient.state.serverUrl}/metadata`;
+          const testResponse = await fetch(testUrl, {
+            headers: {
+              'Authorization': `Bearer ${tokenResponse?.access_token}`,
+              'Accept': 'application/fhir+json'
+            }
+          });
+          console.log('Token test response:', testResponse.status);
+          if (!testResponse.ok) {
+            console.error('Token test failed:', await testResponse.text());
+          } else {
+            console.log('Token is valid and working!');
+          }
+        } catch (testError) {
+          console.error('Token test error:', testError);
+        }
         
         setClient(fhirClient);
         await loadData(fhirClient);
@@ -226,11 +287,10 @@ function LaunchHandler() {
     // Using localhost with trailing slash as registered in Cerner
     const redirectUri = "http://localhost:9002/";
     
-    // Try minimal scopes that match exactly what Cerner expects
-    // Based on SMART v2 and your app being for providers
+    // SMART v1 scope format - use .read and .write
     FHIR.oauth2.authorize({
-      clientId: "21c14f4e-ec5c-4295-ac1c-50ee0e99eee2",
-      scope: "launch patient/Patient.rs patient/Observation.rs openid fhirUser",
+      clientId: "d3a97514-e030-4c9e-8e64-7be8127528b9",
+      scope: "patient/Patient.read patient/Observation.read patient/Observation.write launch openid fhirUser offline_access",
       redirectUri: redirectUri,
       iss: iss,
       launch: launch,
